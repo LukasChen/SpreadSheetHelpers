@@ -3,12 +3,47 @@ import os
 import re
 from openpyxl import load_workbook
 from openpyxl.cell import MergedCell
+from openpyxl.styles import stylesheet
+from openpyxl.styles.numbers import BUILTIN_FORMATS, BUILTIN_FORMATS_MAX_SIZE
+
+# MONKEY PATCH
+
+def _expand_named_style(self, named_style):
+    """
+    Monkey-patched bind format definitions for a named style from the associated style
+    record
+    """
+    try: xf = self.cellStyleXfs[named_style.xfId]
+    except: return  # WORKAROUND for faulty Excel sheets
+    named_style.font = self.fonts[xf.fontId]
+    named_style.fill = self.fills[xf.fillId]
+    named_style.border = self.borders[xf.borderId]
+    if xf.numFmtId < BUILTIN_FORMATS_MAX_SIZE: formats = BUILTIN_FORMATS
+    else:                                      formats = self.custom_formats
+    if xf.numFmtId in formats:
+        named_style.number_format = formats[xf.numFmtId]
+    if xf.alignment:
+        named_style.alignment = xf.alignment
+    if xf.protection:
+        named_style.protection = xf.protection
+
+stylesheet.Stylesheet._expand_named_style = _expand_named_style  # monkey-patch
 
 
 starting_row = 6
 end_row = 16
 start_col = 5
 end_col = 40
+
+template_filename = './template.xlsx'
+output_filename = './output.xlsx'
+
+if len(sys.argv) > 1:
+    template_filename = sys.argv[1]
+if len(sys.argv) > 2:
+    output_filename = sys.argv[2]
+
+print(template_filename, output_filename)
 
 student_tasks = {}
 weekdays = ['MON', 'TUE', 'WED', 'THU', 'FRI']
@@ -42,14 +77,14 @@ for file in full_filenames:
     if match:
         # print(file)
         filename = file.split('.')[0]
-        if file != sys.argv[1].split('/')[1] and file != sys.argv[2].split('/')[1]:
+        if file != os.path.split(template_filename)[1] and file != os.path.split(output_filename)[1]:
             read_student_tasks(filename, file)
 
 
 
 print(student_tasks)
 
-output = load_workbook(sys.argv[1], data_only=True)
+output = load_workbook(template_filename, data_only=True)
 output_sheet = output.active
 student_search_row = 6
 student_search_col = 12
@@ -81,4 +116,4 @@ for i in range(0, 5):
                 index += 1
         
 
-output.save(sys.argv[2])
+output.save(output_filename)
